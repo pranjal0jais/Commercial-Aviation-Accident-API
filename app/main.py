@@ -6,13 +6,13 @@ from datetime import datetime
 
 from fastapi import FastAPI, Path
 from fastapi.params import Query
+from app.utils import load_from_json
 
 BASE_DIR = FilePath(__file__).resolve().parent.parent
 DETAIL_FILE = BASE_DIR / "data" / "aviation_incident_details.json"
 incident_list = []
 if DETAIL_FILE.exists():
     try:
-        from utils import load_from_json
         raw_data = load_from_json(DETAIL_FILE)
         incident_list = [i for i in raw_data if not i.get('error')]
     except Exception as e:
