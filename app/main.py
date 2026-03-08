@@ -1,8 +1,13 @@
 import math
 from collections import Counter
+from contextlib import asynccontextmanager
 from pathlib import Path as FilePath
 from typing import Any
 from datetime import datetime
+
+from whoosh.qparser import MultifieldParser
+
+from app.searchDB import build_index, schema
 
 from fastapi import FastAPI, Path
 from fastapi.params import Query
@@ -11,6 +16,7 @@ from app.utils import load_from_json
 BASE_DIR = FilePath(__file__).resolve().parent.parent
 DETAIL_FILE = BASE_DIR / "data" / "aviation_incident_details.json"
 incident_list = []
+whoosh_idx = None
 if DETAIL_FILE.exists():
     try:
         raw_data = load_from_json(DETAIL_FILE)
@@ -19,10 +25,61 @@ if DETAIL_FILE.exists():
         print(f"Error loading JSON: {e}")
 else:
     print(f"Warning: Data file not found at {DETAIL_FILE}")
+
+@asynccontextmanager
+async def search_index(app: FastAPI):
+    global whoosh_idx
+    whoosh_idx = build_index(incident_list)
+    yield
+
 app = FastAPI(
     title="Aviation Incidents API",
-    version="1.0"
+    version="1.0",
+    lifespan=search_index
 )
+
+def get_query_result(q: str, limit: int)->list:
+    parser = MultifieldParser(
+        ["Title", "Location", "Summary", "Aircraft_Type", "Aircraft_Name"],
+        schema=schema)
+    query = parser.parse(q)
+
+    with whoosh_idx.searcher() as searcher:
+        results = searcher.search(query, limit=limit)
+        data = [dict(r).get("Title") for r in results]
+    return data
+
+def calculate_distance(lat1, lon1, lat2, lon2):
+    R = 6371.0
+
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+
+    a = math.sin(dphi / 2) ** 2 + \
+        math.cos(phi1) * math.cos(phi2) * \
+        math.sin(dlambda / 2) ** 2
+
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    return R * c
+
+
+
+@app.get("/api/incidents/search")
+def search_incidents(
+    q: str = Query(..., min_length=1),
+    limit: int = Query(default=10, le=100)
+) -> dict:
+    filtered_list = []
+    query_result = get_query_result(q, limit)
+    filtered_list = [incident for incident in incident_list
+                     if incident["Title"] in query_result]
+    return {
+        "total": len(filtered_list),
+        "data": filtered_list,
+        "limit": limit,
+    }
 
 @app.get("/")
 def read_root():
@@ -129,25 +186,6 @@ def get_incidents_by_year(
         "offset": offset,
     }
 
-
-def calculate_distance(lat1, lon1, lat2, lon2):
-    # Earth's radius in kilometers
-    R = 6371.0
-
-    # Convert degrees to radians
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
-
-    # Haversine calculation
-    a = math.sin(dphi / 2) ** 2 + \
-        math.cos(phi1) * math.cos(phi2) * \
-        math.sin(dlambda / 2) ** 2
-
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-
-    return R * c
-
 @app.get("/api/incidents/nearby",
          description="Get all nearby incidents within a specified radius")
 def get_nearby_incidents(
@@ -187,7 +225,7 @@ def get_aircraft_summary(
         limit: int = Query(default=10, le=100)
 )->dict[str,Any]:
 
-    aircraft_list = [incident.get("Aircraft type", "Unknown") for incident in incident_list]
+    aircraft_list = [incident.get("Aircraft type", "Unknown") for incident in incident_list]
     counts = Counter(aircraft_list).most_common(limit)
 
     return {
