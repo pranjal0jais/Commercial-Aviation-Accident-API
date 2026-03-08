@@ -1,6 +1,9 @@
 # ✈️ Aviation Incidents API
 
-A FastAPI-powered REST API that serves historical aviation incident data scraped from Wikipedia. Built with a custom web scraper and backed by structured JSON data, it lets you query incidents by country, year, timeline, proximity, and aircraft type.
+A FastAPI-powered REST API that serves historical aviation incident data scraped from Wikipedia. Built with a custom web scraper, full-text search via Whoosh, and backed by structured JSON data.
+
+🌐 **Live API:** https://commercial-aviation-accident-api.onrender.com  
+📖 **Interactive Docs:** https://commercial-aviation-accident-api.onrender.com/docs
 
 ---
 
@@ -9,11 +12,10 @@ A FastAPI-powered REST API that serves historical aviation incident data scraped
 ```
 .
 ├── app/
-│   ├── __init__.py
-│   ├── main.py          # FastAPI app & route definitions
-│   └── utils.py         # JSON load/save helpers
+│   ├── main.py              # FastAPI app & route definitions
+│   ├── searchDB.py          # Whoosh full-text search index
+│   └── utils.py             # JSON load/save helpers
 ├── scraper/
-│   ├── __init__.py
 │   ├── scraper.py               # Entry point for scraping
 │   ├── scrape_incident_links.py # Fetches incident URLs from Wikipedia
 │   └── scrape_incident_details.py # Scrapes detail pages
@@ -57,12 +59,23 @@ This will:
 
 ### Starting the API
 
+Always run from the **project root**, not from inside the `app/` folder:
+
 ```bash
+# Windows PowerShell
+$env:PYTHONPATH = "D:\PythonProject\Aviation Incident API"
 uvicorn app.main:app --reload
+```
+
+```bash
+# Mac / Linux
+PYTHONPATH=. uvicorn app.main:app --reload
 ```
 
 The API will be available at `http://localhost:8000`.  
 Interactive docs (Swagger UI) are at `http://localhost:8000/docs`.
+
+> ⚠️ Do not use `fastapi dev app/main.py` — use `uvicorn` directly to avoid import issues.
 
 ---
 
@@ -80,6 +93,26 @@ Returns a paginated list of all incidents.
 |---|---|---|---|
 | `offset` | int | `0` | Number of records to skip |
 | `limit` | int | `10` | Max records to return (≤ 100) |
+
+---
+
+### `GET /api/incidents/search`
+Full-text keyword search across Title, Location, Summary, Aircraft Name, and Aircraft Type — powered by Whoosh. Supports wildcards, boolean operators, and field-specific queries.
+
+| Query Param | Type | Default | Description |
+|---|---|---|---|
+| `q` | string | required | Search query |
+| `limit` | int | `10` | Max results (≤ 100) |
+
+**Example queries:**
+```
+/api/incidents/search?q=boeing
+/api/incidents/search?q=engine failure
+/api/incidents/search?q=india
+/api/incidents/search?q=boeing AND india
+/api/incidents/search?q=Title:boeing
+/api/incidents/search?q=boeing*
+```
 
 ---
 
@@ -118,7 +151,7 @@ Returns incidents within a year range.
 ---
 
 ### `GET /api/incidents/nearby`
-Returns incidents within a given radius of a geographic coordinate.
+Returns incidents within a given radius of a geographic coordinate, sorted by distance.
 
 | Query Param | Type | Default | Description |
 |---|---|---|---|
@@ -126,8 +159,6 @@ Returns incidents within a given radius of a geographic coordinate.
 | `lon` | float | required | Longitude (-180 to 180) |
 | `radius_km` | float | `100` | Search radius in kilometers |
 | `limit` | int | `10` | Max results |
-
-Results are sorted by distance from the provided coordinates.
 
 ---
 
@@ -145,17 +176,19 @@ Returns a ranked count of incidents by aircraft type.
 | Tool | Purpose |
 |---|---|
 | [FastAPI](https://fastapi.tiangolo.com/) | Web framework |
+| [Whoosh](https://whoosh.readthedocs.io/) | Full-text search |
 | [BeautifulSoup4](https://www.crummy.com/software/BeautifulSoup/) | HTML parsing |
 | [Requests](https://docs.python-requests.org/) | HTTP scraping |
 | [Pandas](https://pandas.pydata.org/) | Date parsing |
+| [Render](https://render.com/) | Hosting & deployment |
 
 ---
 
 ## 👤 Developer
 
 **Pranjal Jais**  
-📧 pranjaljais2@gmail.com  
-📸 [@pranjaljais13](https://www.instagram.com/pranjaljais13)  
+📧 pranjaljais2@gmail.com
+
 🐙 [github.com/pranjal0jais](https://github.com/pranjal0jais)
 
 ---
