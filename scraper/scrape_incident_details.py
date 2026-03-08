@@ -148,19 +148,14 @@ def extract_date(td):
     spans = td.find_all("span")
     date_text = spans[1].get_text(strip=True) if len(spans) > 1 else td.get_text(strip=True)
 
-    # remove references like [1]
     date_text = re.sub(r"\[.*?\]", "", date_text)
 
-    # remove parentheses
     date_text = re.sub(r"\(.*?\)", "", date_text)
 
-    # remove time
     date_text = re.sub(r"\d{1,2}:\d{2}.*", "", date_text)
 
-    # remove Z
     date_text = date_text.replace("Z", "")
 
-    # handle ranges (take first date)
     date_text = re.split(r"–|-", date_text)[0]
 
     date_text = date_text.strip()
